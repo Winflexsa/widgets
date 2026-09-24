@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Termoformado · widget</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1D4E89">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F3F5F7;--card:#FFFFFF;--ink:#1B232C;--mut:#6B7682;--line:#E1E5EA;--acc:#1D4E89;--ok:#1E8A5A;--mid:#C98A12;--bad:#C8372D;--track:#E6EAEE}
+@media (prefers-color-scheme:dark){:root{--bg:#14181D;--card:#1C2229;--ink:#E8ECF0;--mut:#8C97A3;--line:#2A323B;--acc:#6FA3E0;--ok:#3FBF84;--mid:#E3A93A;--bad:#EF6A5E;--track:#2A323B}}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font:14px/1.35 Barlow,system-ui,sans-serif;padding:12px;overflow-y:auto}
+.num{font-family:"Barlow Condensed",Barlow,sans-serif;font-variant-numeric:tabular-nums}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px}
+header h1{font-size:17px;font-weight:600}
+header .tur{color:var(--mut);font-size:13px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mut);margin-right:5px;vertical-align:1px}
+.dot.ok{background:var(--ok)}.dot.err{background:var(--bad)}.dot.load{background:var(--mid)}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
+section h2{font-size:13px;font-weight:600;color:var(--mut);margin-bottom:8px}
+.prod{margin-bottom:12px}.prod:last-child{margin-bottom:0}
+.prow{display:flex;align-items:baseline;justify-content:space-between}
+.pname{font-weight:600;font-size:15px}
+.pct{font-size:40px;font-weight:700;line-height:1}
+.sub{color:var(--mut);font-size:12.5px;margin-top:2px}
+.bar{position:relative;height:8px;background:var(--track);border-radius:4px;margin-top:8px;overflow:visible}
+.bar i{display:block;height:100%;border-radius:4px}
+.bar b{position:absolute;top:-4px;width:2px;height:16px;background:var(--ink);opacity:.55}
+.alert{border-radius:8px;padding:9px 10px;margin-bottom:10px;font-size:13.5px;display:flex;gap:8px;align-items:flex-start}
+.alert.bad{background:color-mix(in srgb,var(--bad) 14%,transparent);border:1px solid color-mix(in srgb,var(--bad) 40%,transparent)}
+.alert.mid{background:color-mix(in srgb,var(--mid) 14%,transparent);border:1px solid color-mix(in srgb,var(--mid) 40%,transparent)}
+table{width:100%;border-collapse:collapse}
+td{padding:5px 0;border-bottom:1px solid var(--line);font-size:14px}
+tr:last-child td{border-bottom:0}
+td.r{text-align:right}
+td .pal{font-size:18px;font-weight:600}
+td .u{color:var(--mut);font-size:12px;margin-left:4px}
+tr.fam td{color:var(--mut);font-size:12px;padding-top:9px;border-bottom:0}
+.empty{color:var(--mut);font-size:13.5px}
+footer{display:flex;gap:8px;justify-content:space-between;align-items:center;color:var(--mut);font-size:12px;padding:2px 2px 0}
+footer>span:last-child{white-space:nowrap;flex-shrink:0}
+footer button,footer a{font:inherit;color:var(--acc);background:none;border:0;cursor:pointer;text-decoration:none;padding:4px}
+footer button:focus-visible,footer a:focus-visible{outline:2px solid var(--acc);border-radius:4px}
+.neg{color:var(--bad)}
+</style>
+</head>
+<body>
+<header><h1>Termoformado</h1><span class="tur" id="tur">…</span></header>
+<div id="alerts"></div>
+<section><h2 id="h-turno">Turno actual</h2><div id="turno"><p class="empty">Cargando…</p></div></section>
+<section><h2>Stock en planta</h2><div id="stock"><p class="empty">Cargando…</p></div></section>
+<footer><span><span class="dot load" id="dot"></span><span id="upd">Conectando…</span></span><span><button id="btn-r" title="Actualizar ahora">↻ Actualizar</button><a href="https://winflexsa.github.io/winflex-termoformado/" target="_blank" rel="noopener">Abrir app</a></span></footer>
+<script>
+// Lógica copiada tal cual de winflex-termoformado/index.html (mismos números que el panel)
+const FACTOR=0.85;
+const HORAS={M1:9,M2:12,N:12};
+const HORARIO={M1:{ini:'07:00',fin:'16:00'},M2:{ini:'07:00',fin:'19:00'},N:{ini:'19:00',fin:'07:00'}};
+const CAT={
+  F40:{fam:'Clamshell',bocas:6,golpes:22,peso:12,  cajas:[600,900]},
+  F41:{fam:'Clamshell',bocas:6,golpes:22,peso:12.4,cajas:[600,900]},
+  F43:{fam:'Clamshell',bocas:6,golpes:22,peso:12.8,cajas:[600,900]},
+  F50:{fam:'Clamshell',bocas:3,golpes:22,peso:23,  cajas:[300,600]},
+  F61:{fam:'Clamshell',bocas:3,golpes:22,peso:26,  cajas:[300,600]},
+  F63:{fam:'Clamshell',bocas:3,golpes:22,peso:23.2,cajas:[300,400,600]},
+  E900:{fam:'Ensaladera',bocas:6,golpes:22,peso:17, cajas:[100,300,400,440,500]},
+  T900:{fam:'Ensaladera',bocas:6,golpes:22,peso:11, cajas:[100,300,400,440,1000]},
+  S900:{fam:'Ensaladera',bocas:6,golpes:22,peso:6.5,cajas:[100,300,880,1000]},
+  E910:{fam:'Ensaladera',bocas:6,golpes:22,peso:17, cajas:[100,300,440,500]},
+};
+const PRODS=Object.keys(CAT);
+function cajaValida(p,u){return !!(CAT[p]&&CAT[p].cajas.includes(+u));}
+const nowISO=()=>new Date().toISOString();
+function touch(x){if(x)x.mod=nowISO();return x;}
+const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+// ── Objetivos de eficiencia (tabla editable en ⚙️ Objetivos, compartida con la tablet por la nube) ──
+const GOLPES_OPC=[17,20,22];
+function objetivosDefault(){const p={};Object.keys(CAT).forEach(k=>{const u={};GOLPES_OPC.forEach(g=>u[g]=CAT[k].bocas*g*60*12);p[k]={golpes:20,u};});return {factor:FACTOR,prods:p,mod:''};}
+function objCfg(){if(!DB.objetivos||!DB.objetivos.prods)DB.objetivos=objetivosDefault();const d=objetivosDefault();Object.keys(d.prods).forEach(k=>{if(!DB.objetivos.prods[k])DB.objetivos.prods[k]=d.prods[k];});if(DB.objetivos.factor==null)DB.objetivos.factor=FACTOR;return DB.objetivos;}
+function objetivoTurno(prod,turno){const c=CAT[prod];if(!c||!turno||!HORAS[turno])return 0;const o=objCfg(),p=o.prods[prod];const u=p&&p.u&&+p.u[p.golpes];if(u>0)return Math.round(u*HORAS[turno]/12*o.factor);return Math.round(c.bocas*c.golpes*60*HORAS[turno]*o.factor);}
+function mergeObjetivos(a,b){if(!a||!a.prods)return b&&b.prods?b:null;if(!b||!b.prods)return a;return ((a.mod||'')>=(b.mod||''))?a:b;}
+const famColor=f=>f==='Ensaladera'?'var(--en)':'var(--cl)';
+let DB={objetivos:null,bobinas:[],pallets:[],pedidos:[],stockConfig:{},ajustes:[],eventos:[],informes:[]};
+const famOk=p=>famFilter==='Todos'||CAT[p]?.fam===famFilter||!CAT[p];
+function bobsFam(){return DB.bobinas.filter(b=>famOk(b.prod));}
+function producido(p){return DB.bobinas.filter(b=>b.prod===p).reduce((s,b)=>s+(b.uds||0),0);}
+function cajasProd(p){return DB.bobinas.filter(b=>b.prod===p).reduce((s,b)=>s+(b.cajas||0),0);}
+function palletsProd(p){return DB.pallets.filter(x=>x.prod===p).length;}
+function vendido(p){return DB.pedidos.filter(x=>x.prod===p).reduce((s,x)=>s+pedSalida(x),0);}
+function enPedido(p){return DB.pedidos.filter(x=>x.prod===p&&x.estado!=='Cancelado'&&x.estado!=='Entregado').reduce((s,x)=>s+pedPendiente(x),0);}
+function stockCfg(p){return DB.stockConfig[p]||{ini:0,rech:0};}
+function ajustesProd(p){return (DB.ajustes||[]).filter(a=>a.prod===p).reduce((s,a)=>s+(a.cantidad||0),0);}
+function stockActual(p){const c=stockCfg(p);return (c.ini||0)+producido(p)-vendido(p)-(c.rech||0)+ajustesProd(p);}
+// ── Cajas por pallet (clamshell por regla; ensaladera por tabla provista) ──
+const CAJAS_PALLET_ENS={
+  E900:{500:24,440:30,400:24,300:36,100:72},
+  T900:{1000:24,440:60,400:45,300:72,100:112},
+  S900:{1000:24,880:30,300:72,100:112},
+  E910:{500:24,440:30,300:36,100:72},
+};
+// Overrides de cajas/pallet para clamshells (medidas de caja que no siguen la regla general)
+const CAJAS_PALLET_CLAM={
+  F63:{400:18},
+};
+function cajasXPallet(prod,uxp){
+  const c=CAT[prod];if(!c)return null;
+  if(c.fam==='Ensaladera'){const m=CAJAS_PALLET_ENS[prod];return (m&&m[uxp])?m[uxp]:null;}
+  const ov=CAJAS_PALLET_CLAM[prod]; if(ov&&ov[uxp])return ov[uxp];
+  if(['F40','F41','F43'].includes(prod))return uxp<=600?24:18;
+  return uxp<=300?24:18;
+}
+// u/caja promedio real (según lo producido); fallback al menor tamaño del catálogo
+function uxpProm(p){const u=producido(p),c=cajasProd(p);if(c>0)return u/c;return (CAT[p]&&CAT[p].cajas[0])||1;}
+// cajas/pallet promedio: usa los pallets reales si hay; sino estima por la tabla con el uxp representativo
+function cajasXPalletProm(p){
+  const pal=DB.pallets.filter(x=>x.prod===p);
+  if(pal.length){const tc=pal.reduce((s,x)=>s+(x.cajas||0),0);if(tc>0)return tc/pal.length;}
+  const ux=uxpProm(p),sizes=(CAT[p]&&CAT[p].cajas)||[];let best=sizes[0],bd=Infinity;
+  sizes.forEach(s=>{const d=Math.abs(s-ux);if(d<bd){bd=d;best=s;}});
+  return cajasXPallet(p,best)||0;
+}
+function stockCajasP(p){const b=stockByBox(p);if(b.length)return b.reduce((s,x)=>s+x.stC,0);const u=uxpProm(p);return u>0?Math.round(stockActual(p)/u):0;}
+function stockPalletsP(p){const b=stockByBox(p);if(b.length)return Math.round(b.reduce((s,x)=>s+x.stP,0)*10)/10;const cpp=cajasXPalletProm(p);return cpp>0?Math.round(stockCajasP(p)/cpp*10)/10:0;}
+// Producción agrupada por tipo de caja (uxp). Exacto desde las bobinas.
+function prodByBox(p){const m={};DB.bobinas.filter(b=>b.prod===p).forEach(b=>{const u=b.uxp||0;if(!u)return;m[u]=m[u]||{uxp:u,uds:0,cajas:0};m[u].uds+=b.uds||0;m[u].cajas+=b.cajas||0;});return Object.values(m).sort((a,b)=>b.uxp-a.uxp);}
+// Stock repartido por tipo de caja, proporcional a lo producido en cada tamaño (las ventas no traen tipo de caja).
+// ── Detalle de stock real cargado manualmente (por tipo de caja) ──
+function stockRealBoxes(p){const c=DB.stockConfig[p];return (c&&c.real&&Array.isArray(c.real.boxes)&&c.real.boxes.length)?c.real.boxes:null;}
+function realPalletsP(p){const r=stockRealBoxes(p);if(!r)return 0;return Math.round(r.reduce((s,x)=>{const cpp=(+x.cpp)||cajasXPallet(p,+x.uxp)||0;return s+(cpp>0?(+x.cajas||0)/cpp:0);},0)*10)/10;}
+function realUdsP(p){const r=stockRealBoxes(p);if(!r)return 0;return r.reduce((s,x)=>s+(+x.cajas||0)*(+x.uxp||0),0);}
+function palletsTotalP(p){return palletsProd(p)+realPalletsP(p);}
+// ── Saldo por tipo de caja: cada formato lleva su propia cuenta (NO se reparte el total) ──
+function boxOfPed(x){return (+x.caja)||0;}
+// Momento de carga de un registro (id con Date.now(), o fecha). Sirve para el corte del recuento.
+function tsCarga(x){const m=String((x&&x.id)||'').match(/^(?:[a-z]+-)?(\d{13})/);if(m)return new Date(+m[1]).toISOString();return x&&x.fecha?(x.fecha+'T00:00:00.000Z'):'';}
+// Corte del recuento: fecha + instante en que se aplico (real.ts). Recuentos viejos: se toma la hora
+// del ajuste "Establecer stock real" de ese dia; si no hay, fin del dia.
+function corteReal(p){
+  const r=(DB.stockConfig[p]||{}).real;if(!r||!(r.boxes&&r.boxes.length))return null;
+  let ts=r.ts||'';
+  if(!ts){const a=(DB.ajustes||[]).find(a=>a.prod===p&&(a.motivo||'').startsWith('Establecer stock real')&&a.fecha===r.fecha);ts=a?tsCarga(a):'';}
+  if(!ts)ts=(r.fecha||'')+'T23:59:59.999Z';
+  return {fecha:r.fecha||'',ts};
+}
+// REGLA: con recuento cargado, el recuento MANDA. Un movimiento cuenta solo si es posterior:
+//  - fecha posterior al dia del recuento, o
+//  - mismo dia del recuento y cargado DESPUES del momento en que se aplico.
+// Lo anterior no se mira mas: borrar/editar/corregir registros viejos ya no mueve el stock.
+// Lo cargado despues pero con fecha anterior (carga atrasada) NO se cuenta y se avisa aparte.
+function posterior(corte,fecha,ts){if(!corte)return true;fecha=fecha||'';if(fecha>corte.fecha)return true;if(fecha<corte.fecha)return false;return (ts||'')>corte.ts;}
+function atrasado(corte,fecha,ts){return !!corte&&(fecha||'')<corte.fecha&&(ts||'')>corte.ts;}
+// Movimientos de un producto que cuentan despues del corte (o todos, si no hay recuento)
+function movsPost(p){
+  const c=corteReal(p);const out=[];const atr=[];
+  DB.bobinas.forEach(b=>{if(b.prod!==p)return;const ts=tsCarga(b);if(posterior(c,b.fecha,ts))out.push({t:'prod',uxp:+b.uxp||0,uds:b.uds||0,ref:b});else if(atrasado(c,b.fecha,ts))atr.push({t:'Producción',fecha:b.fecha,uds:b.uds||0,uxp:+b.uxp||0,ref:b});});
+  DB.pedidos.forEach(x=>{
+    if(x.prod!==p||x.estado==='Cancelado')return;const u=boxOfPed(x);const tp=x.mod||tsCarga(x);
+    if(x.estado==='Entregado'&&!(x.entregas&&x.entregas.length)){
+      if(posterior(c,x.fecha,tp))out.push({t:'vend',uxp:u,uds:x.uds||0,ref:x});else if(atrasado(c,x.fecha,tp))atr.push({t:'Entrega',fecha:x.fecha,uds:x.uds||0,uxp:u,cliente:x.cliente,ref:x});
+      return;
+    }
+    (x.entregas||[]).forEach(e=>{const te=e.ts||tp;
+      const ls=(e.lineas&&e.lineas.length)?e.lineas.map(l=>({uxp:+l.uxp||0,uds:+l.uds||0})):[{uxp:u,uds:e.uds||0}];
+      ls.forEach(l=>{if(!l.uds)return;if(posterior(c,e.fecha,te))out.push({t:'vend',uxp:l.uxp,uds:l.uds,ref:x});else if(atrasado(c,e.fecha,te))atr.push({t:'Entrega',fecha:e.fecha,uds:l.uds,uxp:l.uxp,cliente:x.cliente,ref:x});});});
+  });
+  (DB.ajustes||[]).forEach(a=>{if(a.prod!==p||(a.motivo||'').startsWith('Establecer stock real'))return;const ts=a.mod||tsCarga(a);if(posterior(c,a.fecha,ts))out.push({t:'aj',uxp:+a.uxp||0,uds:a.cantidad||0,ref:a});else if(atrasado(c,a.fecha,ts))atr.push({t:'Ajuste',fecha:a.fecha,uds:a.cantidad||0,uxp:+a.uxp||0,ref:a});});
+  return {corte:c,movs:out,atrasados:atr};
+}
+function movsAtrasados(p){return movsPost(p).atrasados;}
+function stockByBox(p){
+  const sa=stockActual(p);
+  const real=stockRealBoxes(p);
+  const {movs}=movsPost(p);
+  const m={};
+  const ensure=u=>{if(!m[u])m[u]={uxp:+u,uds:0,cpp:cajasXPallet(p,+u)||0};return m[u];};
+  if(real)real.forEach(x=>{const u=+x.uxp||0;if(!u)return;const e=ensure(u);e.uds+=(+x.cajas||0)*u;if(+x.cpp>0)e.cpp=+x.cpp;});
+  let resid=0;
+  movs.forEach(mv=>{const s=mv.t==='vend'?-mv.uds:mv.uds;if(mv.uxp>0)ensure(mv.uxp).uds+=s;else resid+=s;});
+  let arr=Object.values(m).filter(x=>x.uxp>0);
+  if(!arr.length&&!real)return [];
+  const asignado=arr.reduce((s,x)=>s+x.uds,0);
+  if(!real)resid=sa-asignado; // sin recuento: stock inicial, ajustes viejos, etc.
+  arr.sort((a,b)=>b.uxp-a.uxp);
+  const out=arr.map(x=>{const stU=x.uds;const stC=x.uxp>0?stU/x.uxp:0;const cpp=x.cpp;return {uxp:x.uxp,frac:sa?stU/sa:0,stU:Math.round(stU),stC:Math.round(stC),stP:cpp>0?Math.round(stC/cpp*10)/10:0,cpp,invalido:!cajaValida(p,x.uxp)};});
+  if(Math.abs(resid)>=1)out.push({uxp:0,sinFmt:true,frac:sa?resid/sa:0,stU:Math.round(resid),stC:0,stP:0,cpp:0});
+  return out;
+}
+// ── Unidades en planta: una sola fuente de verdad ──
+function stockUds(p){
+  const b=stockByBox(p);
+  if(!b.length||!stockRealBoxes(p))return stockActual(p);
+  return b.filter(x=>!x.sinFmt).reduce((s,x)=>s+x.stU,0);
+}
+function pedsIncoherentes(p){
+  return DB.pedidos.filter(x=>{
+    if(x.prod!==p||x.estado!=='Entregado')return false;
+    if(!(x.entregas&&x.entregas.length))return false;
+    const e=x.entregas.reduce((s,y)=>s+(y.uds||0),0);
+    return e<(x.uds||0);
+  }).map(x=>({cliente:x.cliente,fecha:x.fecha,uds:x.uds||0,ent:x.entregas.reduce((s,y)=>s+(y.uds||0),0)}));
+}
+function sinFmtProd(p){return movsPost(p).movs.filter(m=>m.t==='prod'&&!m.uxp).reduce((s,m)=>s+m.uds,0);}
+function sinFmtPed(p){return new Set(movsPost(p).movs.filter(m=>m.t==='vend'&&!m.uxp).map(m=>m.ref.id)).size;}
+function sinFmtPedUds(p){return movsPost(p).movs.filter(m=>m.t==='vend'&&!m.uxp).reduce((s,m)=>s+m.uds,0);}
+function ajustesSinFmt(p){return movsPost(p).movs.filter(m=>m.t==='aj'&&!m.uxp).reduce((s,m)=>s+m.uds,0);}
+// ── Orden y hora de carga de cada bobina ──
+// El id se genera con Date.now() (tablet: "1755...", panel: "man-1755..."), asi que
+// sirve como orden real de carga. Fallback: fecha + hora declarada.
+function ordCarga(b){
+  const m=String(b.id||'').match(/^(?:[a-z]+-)?(\d{13})/);
+  if(m)return +m[1];
+  const h=String(b.hora||'').match(/^(\d{1,2}):(\d{2})/);
+  if(h&&b.fecha)return Date.parse(b.fecha+'T'+String(h[1]).padStart(2,'0')+':'+h[2])||0;
+  return b.fecha?(Date.parse(b.fecha+'T00:00')||0):0;
+}
+function pedSalida(p){if(p.estado==='Cancelado')return 0;if(p.entregas&&p.entregas.length)return p.entregas.reduce((s,x)=>s+(x.uds||0),0);return p.estado==='Entregado'?(p.uds||0):0;}
+function pedEntregado(p){if(p.estado==='Cancelado')return 0;if(p.estado==='Entregado')return p.uds||0;return Math.min((p.entregas||[]).reduce((s,x)=>s+(x.uds||0),0),p.uds||0);}
+function pedPendiente(p){if(p.estado==='Cancelado')return 0;return Math.max(0,(p.uds||0)-pedEntregado(p));}
+const EV_TIPOS=[
+  {k:'matriz',ic:'🔧',lbl:'Cambio de matriz / producto'},
+  {k:'mantenimiento',ic:'🛠',lbl:'Parada por mantenimiento'},
+  {k:'camion',ic:'🚚',lbl:'Carga de camión'},
+  {k:'punzones',ic:'💥',lbl:'Rotura de punzones'},
+  {k:'apilador',ic:'📚',lbl:'Falla del apilador'},
+  {k:'lamina',ic:'🎞️',lbl:'Problema con la lámina / bobina'},
+  {k:'material',ic:'📦',lbl:'Falta de material o cajas'},
+  {k:'servicios',ic:'⚡',lbl:'Corte de luz / aire / agua fría'},
+  {k:'calidad',ic:'🔍',lbl:'Problema de calidad / regulación'},
+  {k:'lenta',ic:'🐢',lbl:'No paró, pero anda lenta o con menos bocas',paro:false},
+  {k:'otro',ic:'✏️',lbl:'Otro motivo'}
+];
+function evTipo(k){return EV_TIPOS.find(t=>t.k===k)||{k,ic:'⏸',lbl:k||'Evento'};}
+
+// ══════════ WIDGET ══════════
+const BIN_ID=localStorage.getItem('wf_termo_binid')||'6a243e42da38895dfe915231';
+const KEY=localStorage.getItem('wf_termo_apikey')||'$2a$10$8p4t41BnTv.9Ls.4kFLhouDMqJGQEd5LQlBYEz8n1y6nH/3dFq27G';
+const REFRESCO_MIN=2;
+const fmt=n=>(Math.round(n)||0).toLocaleString('es-AR');
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const pctColor=e=>e>=100?'var(--ok)':e>=80?'var(--mid)':'var(--bad)';
+const hhmm=d=>d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+
+// Turno según el reloj: día 07–19 (M1 o M2), noche 19–07 (la fecha es la del día en que arrancó)
+function turnoReloj(now){
+  const h=now.getHours();
+  if(h>=7&&h<19)return {fecha:ymd(now),grupo:['M1','M2'],ini:new Date(now.getFullYear(),now.getMonth(),now.getDate(),7),nombre:'Día'};
+  const base=new Date(now);if(h<7)base.setDate(base.getDate()-1);
+  return {fecha:ymd(base),grupo:['N'],ini:new Date(base.getFullYear(),base.getMonth(),base.getDate(),19),nombre:'Noche'};
+}
+function minDesde(fecha,hIni,now){
+  const m=/^(\d{1,2}):(\d{2})/.exec(hIni||'');if(!m)return null;
+  let d=new Date(fecha+'T00:00');d.setHours(+m[1],+m[2],0,0);
+  if(d>now)d.setDate(d.getDate()+1);               // turno noche: hora de madrugada
+  let min=Math.round((now-d)/60000);if(min<0)min+=1440;return min;
+}
+const durTxt=m=>m==null?'':m<60?m+' min':Math.floor(m/60)+' h '+String(m%60).padStart(2,'0');
+
+function limpiar(r){
+  const drop=(arr,tomb)=>{const s=new Set((tomb||[]).map(t=>t.id));return (arr||[]).filter(x=>x&&!s.has(x.id));};
+  return {
+    objetivos:(r.objetivos&&r.objetivos.prods)?r.objetivos:null,
+    bobinas:drop(r.bobinas,r.bobinasBorradas),pallets:r.pallets||[],
+    pedidos:drop(r.pedidos,r.pedidosBorrados),ajustes:drop(r.ajustes,r.ajustesBorrados),
+    stockConfig:r.stockConfig||{},eventos:drop(r.eventos,r.eventosBorrados),informes:drop(r.informes,r.informesBorrados)
+  };
+}
+
+function render(){
+  const now=new Date(),T=turnoReloj(now);
+  const bobs=DB.bobinas.filter(b=>b.fecha===T.fecha&&T.grupo.includes(b.turno));
+  // qué turno se está usando (M1 o M2 de día)
+  const cuenta={};bobs.forEach(b=>cuenta[b.turno]=(cuenta[b.turno]||0)+1);
+  const tUsado=Object.keys(cuenta).sort((a,b)=>cuenta[b]-cuenta[a])[0]||(T.nombre==='Noche'?'N':null);
+  $('tur').textContent=T.nombre+(tUsado&&tUsado!=='N'?' ('+tUsado+')':'')+' · '+new Date(T.fecha+'T12:00').toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'numeric'});
+
+  // alertas: parada abierta e informes sin leer
+  let al='';
+  DB.eventos.filter(e=>e.fecha===T.fecha&&T.grupo.includes(e.turno)&&!e.hFin&&e.paro!==false).forEach(e=>{
+    const t=evTipo(e.tipo),m=minDesde(e.fecha,e.hIni,now);
+    al+=`<div class="alert bad" role="status"><span>${t.ic}</span><span><b>Máquina parada:</b> ${esc(t.lbl)} desde las ${esc(e.hIni||'?')}${m!=null?' ('+durTxt(m)+')':''}${e.nota?'<br><span class="sub">'+esc(e.nota)+'</span>':''}</span></div>`;
+  });
+  const sinVer=DB.informes.filter(i=>!i.vistoTs).length;
+  if(sinVer)al+=`<div class="alert mid"><span>📝</span><span>${sinVer} informe${sinVer>1?'s':''} de turno sin leer</span></div>`;
+  $('alerts').innerHTML=al;
+
+  // turno actual
+  if(!bobs.length){
+    const ult=DB.bobinas.slice().sort((a,b)=>ordCarga(b)-ordCarga(a))[0];
+    $('turno').innerHTML=`<p class="empty">Todavía no hay producción cargada en este turno.${ult?'<br>Última carga: '+esc(ult.prod)+' el '+new Date(ordCarga(ult)).toLocaleString('es-AR',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})+'.':''}</p>`;
+  }else{
+    const horas=HORAS[tUsado]||12;
+    const frac=Math.max(0,Math.min(1,(now-T.ini)/3600000/horas));
+    const porProd={};bobs.forEach(b=>{const p=porProd[b.prod]||(porProd[b.prod]={uds:0,n:0,ult:0});p.uds+=b.uds||0;p.n++;p.ult=Math.max(p.ult,ordCarga(b));});
+    const ultGlobal=Math.max(...Object.values(porProd).map(p=>p.ult));
+    const minSin=Math.round((now-ultGlobal)/60000);
+    let h='';
+    Object.entries(porProd).sort((a,b)=>b[1].ult-a[1].ult).forEach(([p,d])=>{
+      const obj=objetivoTurno(p,tUsado);const e=obj>0?Math.round(d.uds/obj*100):null;
+      const esp=obj>0?Math.round(obj*frac):0;
+      h+=`<div class="prod"><div class="prow"><span class="pname">${esc(p)}</span>${e!=null?`<span class="pct num" style="color:${pctColor(e)}">${e}%</span>`:''}</div>
+      <div class="sub"><span class="num">${fmt(d.uds)}</span> de <span class="num">${fmt(obj)}</span> u · ${d.n} bobina${d.n>1?'s':''}${esp>0?` · a esta hora deberían ir <span class="num">${fmt(esp)}</span>`:''}</div>
+      ${obj>0?`<div class="bar" aria-hidden="true"><i style="width:${Math.min(100,e)}%;background:${pctColor(d.uds>=esp?100:d.uds>=esp*0.8?80:0)}"></i><b style="left:calc(${(frac*100).toFixed(1)}% - 1px)" title="Ritmo esperado a esta hora"></b></div>`:''}</div>`;
+    });
+    h+=`<p class="sub" style="margin-top:6px${minSin>45?';color:var(--bad);font-weight:600':''}">Última carga hace ${durTxt(minSin)}${minSin>45?' — revisar':''}</p>`;
+    $('turno').innerHTML=h;
+  }
+
+  // stock
+  const fams=['Ensaladera','Clamshell'];let s='';
+  fams.forEach(f=>{
+    const filas=PRODS.filter(p=>CAT[p].fam===f).map(p=>({p,pal:stockPalletsP(p),u:stockUds(p)})).filter(x=>Math.abs(x.u)>=1||Math.abs(x.pal)>=0.1);
+    if(!filas.length)return;
+    s+=`<tr class="fam"><td colspan="2">${f==='Ensaladera'?'Ensaladeras':'Clamshells'}</td></tr>`;
+    filas.forEach(x=>{s+=`<tr><td>${esc(x.p)}</td><td class="r"><span class="pal num${x.pal<0?' neg':''}">${String(x.pal).replace('.',',')}</span> <span class="num">pallets</span><span class="u num${x.u<0?' neg':''}">${fmt(x.u)} u</span></td></tr>`;});
+  });
+  $('stock').innerHTML=s?`<table>${s}</table>`:'<p class="empty">Sin stock cargado.</p>';
+}
+
+let cargando=false;
+async function cargar(){
+  if(cargando)return;cargando=true;$('dot').className='dot load';
+  try{
+    const r=await fetch('https://api.jsonbin.io/v3/b/'+BIN_ID+'/latest',{headers:{'X-Master-Key':KEY},cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    Object.assign(DB,limpiar((await r.json()).record||{}));
+    render();
+    $('dot').className='dot ok';$('upd').textContent='Actualizado '+hhmm(new Date());
+  }catch(e){
+    $('dot').className='dot err';$('upd').textContent=(String(e.message).startsWith('HTTP')||e.name==='TypeError'&&/fetch/i.test(e.message))?'Sin conexión ('+e.message+') · reintenta solo':'Error al mostrar: '+e.message;console.error(e);
+  }finally{cargando=false;}
+}
+$('btn-r').onclick=cargar;
+setInterval(()=>{if(document.visibilityState==='visible')cargar();},REFRESCO_MIN*60000);
+setInterval(()=>{if(DB.bobinas.length)render();},30000); // el reloj del turno avanza aunque no se recargue
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')cargar();});
+cargar();
+</script>
+</body>
+</html>
