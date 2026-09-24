@@ -9,7 +9,7 @@
 html,body{height:100%;overflow:hidden}
 body{background:#e6eee8 repeating-radial-gradient(circle at 50% 48%,#eef4ef 0 22px,#dde8df 22px 24px);}
 body::before{content:"";position:fixed;inset:0;background:radial-gradient(circle at 50% 48%,rgba(255,255,255,.9) 0,rgba(255,255,255,0) 18%),radial-gradient(circle at 50% 110%,rgba(14,122,73,.18),transparent 55%)}
-body.foto{background:#e6eee8 url("fondo.jpg") center/cover no-repeat}
+body.foto{background:#e6eee8 center/cover no-repeat}
 body.foto::before,body.foto #logo{display:none}
 #logo{position:fixed;left:50%;top:14%;transform:translateX(-50%);width:min(34vw,520px);opacity:.95}
 /* Columna de widgets a la derecha (lugar libre del escritorio) */
@@ -23,11 +23,14 @@ body.foto::before,body.foto #logo{display:none}
   <iframe src="../termoformado/index.html" title="Termoformado" style="height:430px"></iframe>
 </div>
 <script>
-// Si en esta carpeta hay un fondo.jpg (tu fondo de pantalla actual), se usa ese.
+// Si en esta carpeta está tu fondo de pantalla, se usa ese (prueba estos nombres en orden)
 // Cada widget toma el alto justo de su contenido
 function ajustar(){document.querySelectorAll('#widgets iframe').forEach(fr=>{try{const d=fr.contentDocument;if(d&&d.body){const h=d.querySelector('.wrap');const alto=(d.querySelector('header')?.offsetHeight||0)+(h?h.offsetHeight:d.body.scrollHeight);if(alto>60)fr.style.height=alto+'px';}}catch(_){}});}
 setInterval(ajustar,2000);window.addEventListener('load',ajustar);
-const f=new Image();f.onload=()=>document.body.classList.add('foto');f.src='fondo.jpg';
+(function(){const ns=['winflex_B2.png','fondo.jpg','fondo.png'];let i=0;
+ (function probar(){if(i>=ns.length)return;const n=ns[i++],f=new Image();
+  f.onload=()=>{document.body.style.background='#e6eee8 url("'+n+'") center/cover no-repeat';document.body.classList.add('foto');};
+  f.onerror=probar;f.src=n;})();})();
 </script>
 </body>
 </html>
